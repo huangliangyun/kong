@@ -1,95 +1,40 @@
--- If you're not sure your plugin is executing, uncomment the line below and restart Kong
--- then it will throw an error which indicates the plugin is being loaded at least.
+local body_transformer = require "kong.plugins.myplugin.body_transformer"
+local header_transformer = require "kong.plugins.myplugin.header_transformer"
 
---assert(ngx.get_phase() == "timer", "The world is coming to an end!")
+local is_body_transform_set = header_transformer.is_body_transform_set
+local is_json_body = header_transformer.is_json_body
+local concat = table.concat
+local kong = kong
+local ngx = ngx
 
+local ResponseTransformerHandler = {}
 
--- Grab pluginname from module name
-local plugin_name = ({...})[1]:match("^kong%.plugins%.([^%.]+)")
-
-
-local plugin = {
-  PRIORITY = 1000, -- set the plugin priority, which determines plugin execution order
-  VERSION = "0.1",
-}
-
--- constructor
-function plugin:new()
-
-  -- do initialization here, runs in the 'init_by_lua_block', before worker processes are forked
-
+function ResponseTransformerHandler:header_filter(conf)
+  header_transformer.transform_headers(conf, kong.response.get_headers())
 end
 
+function ResponseTransformerHandler:body_filter(conf)
+  if is_body_transform_set(conf) and is_json_body(kong.response.get_header("Content-Type")) then
+    local ctx = ngx.ctx
+    local chunk, eof = ngx.arg[1], ngx.arg[2]
 
----------------------------------------------------------------------------------------------
--- In the code below, just remove the opening brackets; `[[` to enable a specific handler
---
--- The handlers are based on the OpenResty handlers, see the OpenResty docs for details
--- on when exactly they are invoked and what limitations each handler has.
----------------------------------------------------------------------------------------------
+    ctx.rt_body_chunks = ctx.rt_body_chunks or {}
+    ctx.rt_body_chunk_number = ctx.rt_body_chunk_number or 1
 
+    if eof then
+      local chunks = concat(ctx.rt_body_chunks)
+      local body = body_transformer.transform_json_body(conf, chunks)
+      ngx.arg[1] = body or chunks
 
---[[ handles more initialization, but AFTER the worker process has been forked/created.
--- It runs in the 'init_worker_by_lua_block'
-function plugin:init_worker()
+    else
+      ctx.rt_body_chunks[ctx.rt_body_chunk_number] = chunk
+      ctx.rt_body_chunk_number = ctx.rt_body_chunk_number + 1
+      ngx.arg[1] = nil
+    end
+  end
+end
 
-  -- your custom code here
+ResponseTransformerHandler.PRIORITY = 800
+ResponseTransformerHandler.VERSION = "2.0.0"
 
-end --]]
-
-
---[[ runs in the ssl_certificate_by_lua_block handler
-function plugin:certificate(plugin_conf)
-
-  -- your custom code here
-
-end --]]
-
-
---[[ runs in the 'rewrite_by_lua_block'
--- IMPORTANT: during the `rewrite` phase neither the `api` nor the `consumer` will have
--- been identified, hence this handler will only be executed if the plugin is
--- configured as a global plugin!
-function plugin:rewrite(plugin_conf)
-
-  -- your custom code here
-
-end --]]
-
-
----[[ runs in the 'access_by_lua_block'
-function plugin:access(plugin_conf)
-
-  -- your custom code here
-  ngx.req.set_header("Hello-World", "this is on a request")
-
-end --]]
-
-
----[[ runs in the 'header_filter_by_lua_block'
-function plugin:header_filter(plugin_conf)
-
-  -- your custom code here, for example;
-  ngx.header["Bye-World"] = "this is on the response"
-
-end --]]
-
-
---[[ runs in the 'body_filter_by_lua_block'
-function plugin:body_filter(plugin_conf)
-
-  -- your custom code here
-
-end --]]
-
-
---[[ runs in the 'log_by_lua_block'
-function plugin:log(plugin_conf)
-
-  -- your custom code here
-
-end --]]
-
-
--- return our plugin object
-return plugin
+return ResponseTransformerHandler
