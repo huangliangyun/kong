@@ -26,7 +26,7 @@ public class JwtUtil {
                     .withIssuer(key)
                     //如果要设置过期时间，需要在 Kong 中设置载荷exp
                     //指定过期时间，在 kong 中 可指定 maximum expiration 最大过期时间，此时间不能超过 maximum expiration，否则生成 token 无效
-                    .withExpiresAt(new Date(currentTime.getTime() + 60000L))
+                    //.withExpiresAt(new Date(currentTime.getTime() + 60000L))
                     .sign(algorithm);
             System.out.println(new Date());
         } catch (JWTCreationException exception) {
@@ -36,6 +36,6 @@ public class JwtUtil {
     }
 
     public static void main(String[] args) {
-        System.out.println(getJwt("KA6Uf2ATwe69HndTQbz1BVCkgcq3IFwM", "pgmVPMPmF8cy66JmHqRuRA1cZNZUs9p2"));
+        System.out.println(getJwt("LPYffRX3kDnXHInICVOEE1BpOa08PCTL", "HcvzoJShzt2rYrV60AfjuDLOkQqzBx9a"));
     }
 }
